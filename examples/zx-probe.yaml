@@ -1,0 +1,40 @@
+# Look at the zero-cross signal of the Plug M Gen3 before anything switches mains with it. This does not touch the relay.
+# No load is needed, only mains on the plug.
+#
+# What this found out (measured on a real Plug M Gen3):
+#   - GPIO3 is the BL0942's multiplexed CF/ZX pin. After a reset it outputs the ENERGY pulse (CF): nothing without load, a few
+#     pulses per minute at 58 W. That is why the first probes saw nothing.
+#   - The stock firmware writes the BL0942 register OT_FUNX (0x18) = 2 over the UART; then the pin follows the zero crossings.
+#     Measured with that: ~3000 falling edges/min, ~5994 edges/min counting both = 2 x 50 Hz x 60. So the level flips at EVERY
+#     zero crossing: use zx_edge ANY. OT_FUNX = 0 puts the pin back to the energy pulse.
+#   - The setting is lost when the BL0942 resets (reboot of the plug); the buttons below write it again.
+#
+# Use: merge the blocks below into shelly-plug-m-gen3.yaml (sensor: and a new button: list), install, press the ZX button and
+# read "ZX edges per minute" (the first value after the press covers a partial window; use the next ones). Expect ~6000
+# (60 Hz: ~7200). The "CF" button writes OT_FUNX = 0 again (the counter goes back to the energy pulse).
+#
+# The frames are: 0xA8, register, 3 data bytes, checksum = ~sum (see ../components/zero_cross_switch/bl0942_frames.h).
+
+sensor:
+  - platform: pulse_counter
+    name: "ZX edges per minute"
+    pin: {number: GPIO3, mode: INPUT_PULLUP}
+    count_mode: {rising_edge: INCREMENT, falling_edge: INCREMENT}
+    internal_filter: 0us
+    update_interval: 10s
+    unit_of_measurement: "edges/min"
+    accuracy_decimals: 0
+
+button:
+  - platform: template
+    name: "BL0942 pin = ZX (OT_FUNX=2)"
+    on_press:
+      - uart.write: {id: bl0942_uart, data: [0xA8, 0x1D, 0x55, 0x00, 0x00, 0xE5]}  # unlock
+      - delay: 50ms
+      - uart.write: {id: bl0942_uart, data: [0xA8, 0x18, 0x02, 0x00, 0x00, 0x3D]}  # OT_FUNX = 2
+  - platform: template
+    name: "BL0942 pin = CF (OT_FUNX=0)"
+    on_press:
+      - uart.write: {id: bl0942_uart, data: [0xA8, 0x1D, 0x55, 0x00, 0x00, 0xE5]}
+      - delay: 50ms
+      - uart.write: {id: bl0942_uart, data: [0xA8, 0x18, 0x00, 0x00, 0x00, 0x3F]}  # OT_FUNX = 0

@@ -1,0 +1,34 @@
+# Zero-cross relay for the Shelly Plug M Gen3 (the only device this has been tested on). The signal was confirmed with
+# zx-probe.yaml (GPIO3 toggles at every zero crossing once the BL0942 register OT_FUNX is 2; chip_type: bl0942 writes it over
+# the existing UART).
+#
+# In shelly-plug-m-gen3.yaml: delete the `switch:` block that defines `id: relay` (platform: gpio) and paste the two
+# blocks below instead. Everything else (button, LED script) keeps working because the id stays `relay`.
+#
+# The component switches at a zero crossing like the stock firmware (relay times 6500 us on / 7800 us off, taken from
+# the stock app). If the zero-cross signal is missing or implausible it switches immediately, exactly as before.
+
+external_components:
+  - source:
+      type: local
+      path: ../components   # the `components` folder of this repository
+    components: [zero_cross_switch]
+
+switch:
+  - platform: zero_cross_switch
+    id: relay
+    name: "Relay"
+    relay_pin: GPIO0
+    chip_type: bl0942
+    uart_id: bl0942_uart       # the bus of the bl0942 sensor; required for chip_type: bl0942
+    zx_pin:
+      number: GPIO3
+      mode: INPUT_PULLUP       # same setting as in the successful probe
+    zx_edge: ANY               # measured: ~6000 edges/min at 50 Hz = the level flips at every zero crossing
+    restore_mode: RESTORE_DEFAULT_OFF
+    on_turn_on:
+      - script.execute: led_show_relay
+    on_turn_off:
+      - script.execute: led_show_relay
+    frequency:
+      name: "Mains frequency (zero-cross)"

@@ -1,0 +1,30 @@
+# Zero-cross relay for any ESP32 device that already provides a clean zero-cross signal on a GPIO (no chip_type needed).
+# UNTESTED on real hardware other than the Shelly Plug M Gen3 (see README, "Tested devices").
+#
+# Check the signal first: count the edges per minute on zx_pin (see zx-probe.yaml). One zero crossing must be exactly one
+# edge: pick RISING / FALLING for a pulse per zero crossing, ANY if the level flips at every zero crossing.
+# The relay times below are the Shelly defaults; measure your relay (scope) and set on_time_us / off_time_us.
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [zero_cross_switch]
+
+switch:
+  - platform: zero_cross_switch
+    name: "Relay"
+    relay_pin: GPIO0
+    zx_pin:
+      number: GPIO3
+      mode: INPUT_PULLUP
+    zx_edge: RISING
+    on_time_us: 6500
+    off_time_us: 7800
+    frequency:
+      name: "Mains frequency (zero-cross)"
