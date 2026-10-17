@@ -18,13 +18,14 @@ class Bl0942ZxChip : public ZxChip, public uart::UARTDevice {
  public:
   void service(uint32_t ms) override;
   void on_signal_lost(uint32_t ms) override;
+  void on_signal_restored() override;
   void dump_config() override;
 
  protected:
   uint8_t phase_{0};  // 0 = idle, 1 = unlock sent, waiting to send OT_FUNX
   uint32_t sent_ms_{0};
   bool ever_sent_{false};
-  bool force_{false};  // rewrite OT_FUNX as soon as possible (signal lost)
+  uint8_t repairs_left_{0};  // forced OT_FUNX rewrites still to do after a signal loss
 };
 
 }  // namespace zero_cross_switch

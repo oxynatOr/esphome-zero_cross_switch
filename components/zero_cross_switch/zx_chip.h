@@ -15,6 +15,8 @@ class ZxChip {
   // Called once by the switch when a locked zero-cross signal disappeared (e.g. the chip was reset and fell back to its
   // default pin function). The chip can then repair the setup right away instead of waiting for its regular refresh.
   virtual void on_signal_lost(uint32_t ms) {}
+  // Called once when the switch (re)gains a lock, e.g. to stop repair attempts.
+  virtual void on_signal_restored() {}
   virtual void dump_config() {}
 };
 

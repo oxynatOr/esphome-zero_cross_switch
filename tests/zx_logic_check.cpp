@@ -117,6 +117,43 @@ static_assert(!ZxEstimator(kMin, kMax, 8, kAge).stale(1000000), "never seen an e
 // 2 edges per period (default) still rejects a 20 ms spacing
 static_assert(!feed_per_cycle().locked(29 * 20000), "default mode rejects one edge per period");
 
+// --- fine correction (isr_offset_us): never moves the drive time to the edge itself, wraps by half periods instead ---
+static_assert(corrected_delay_us(3500, 0, 10000) == 3500, "no offset");
+static_assert(corrected_delay_us(3500, 200, 10000) == 3700, "positive offset");
+static_assert(corrected_delay_us(2200, -500, 10000) == 1700, "small negative offset");
+static_assert(corrected_delay_us(2200, -2000, 10000) == 200, "negative offset close to the edge");
+static_assert(corrected_delay_us(2200, -2200, 10000) == 10000, "offset onto the edge wraps one half period");
+static_assert(corrected_delay_us(1000, -2000, 10000) == 9000, "offset past the edge wraps one half period");
+static_assert(corrected_delay_us(533, -2000, 8333) == 6866, "60 Hz wrap");
+static_assert(corrected_delay_us(3500, -100, 0) == 0, "unknown half period: switch now");
+
+// --- edge asymmetry (2 edges per period): intervals alternate a / b ---
+constexpr ZxEstimator feed_asym(uint32_t a, uint32_t b, uint32_t max_asym, int pairs = 15) {
+  ZxEstimator e(kMin, kMax, 8, kAge, 2, max_asym);
+  uint32_t t = 0;
+  for (int i = 0; i < pairs; i++) {
+    e.on_edge(t);
+    t += a;
+    e.on_edge(t);
+    t += b;
+  }
+  return e;
+}
+constexpr uint32_t kEndAsym(uint32_t a, uint32_t b, int pairs = 15) { return (a + b) * (pairs - 1) + a; }
+static_assert(feed_asym(10000, 10000, 200).locked(kEndAsym(10000, 10000)), "symmetric signal locks");
+static_assert(feed_asym(10000, 10000, 200).asymmetry_us() == 0, "no asymmetry");
+static_assert(feed_asym(10050, 9950, 200).locked(kEndAsym(10050, 9950)), "100 us asymmetry is accepted");
+static_assert(feed_asym(10050, 9950, 200).half_period_us() >= 9990 && feed_asym(10050, 9950, 200).half_period_us() <= 10010,
+              "half period is the mean");
+static_assert(!feed_asym(9000, 11000, 200).locked(kEndAsym(9000, 11000)), "45/55 duty cycle does not lock");
+static_assert(feed_asym(9000, 11000, 200).asymmetric(), "and is reported as asymmetric");
+static_assert(feed_asym(9000, 11000, 200).asymmetry_us() > 1500, "asymmetry about 2000 us");
+static_assert(feed_asym(9000, 11000, ZxEstimator::NO_ASYMMETRY_CHECK).locked(kEndAsym(9000, 11000)),
+              "check disabled: locks (old behaviour)");
+static_assert(!feed50(20).asymmetric(), "default estimator has no asymmetry check");
+static_assert(feed_period(20, 20000).asymmetry_us() == 0 && !feed_period(20, 20000).asymmetric(),
+              "1 edge per period: every interval alike, no check");
+
 // --- BL0942 write frames: the bytes the hardware test sent (and the stock firmware builds) ---
 constexpr bool same(Bl0942Frame f, const uint8_t (&e)[6]) {
   for (int i = 0; i < 6; i++)

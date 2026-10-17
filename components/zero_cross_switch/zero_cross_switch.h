@@ -34,6 +34,7 @@ class ZeroCrossSwitch : public switch_::Switch, public Component {
   void set_max_frequency(float hz) { max_frequency_ = hz; }
   void set_edges_needed(uint8_t n) { edges_needed_ = n; }
   void set_edges_per_period(uint8_t n) { edges_per_period_ = n; }
+  void set_max_asymmetry_us(uint32_t us) { max_asymmetry_us_ = us; }
   void set_isr_offset_us(int32_t us) { isr_offset_us_ = us; }
   void set_frequency_sensor(sensor::Sensor *s) { frequency_sensor_ = s; }
   void set_chip(ZxChip *chip) { chip_ = chip; }
@@ -55,6 +56,7 @@ class ZeroCrossSwitch : public switch_::Switch, public Component {
   float max_frequency_{65.0f};
   uint8_t edges_needed_{8};
   uint8_t edges_per_period_{2};
+  uint32_t max_asymmetry_us_{200};
   int32_t isr_offset_us_{0};
   sensor::Sensor *frequency_sensor_{nullptr};
   ZxChip *chip_{nullptr};
@@ -66,6 +68,7 @@ class ZeroCrossSwitch : public switch_::Switch, public Component {
 
   ZxEstimator *estimator_{nullptr};
   bool was_locked_{false};  // main task: a lock existed and its loss has not been reported to the chip yet
+  bool asym_reported_{false};  // main task: the asymmetry warning was logged for the current episode
 
   // Shared between main task and ISRs. Single writer per field; see write_state() for the ordering.
   volatile bool pending_{false};
@@ -73,7 +76,8 @@ class ZeroCrossSwitch : public switch_::Switch, public Component {
   volatile bool armed_state_{false};
   volatile uint32_t request_ms_{0};
   volatile uint32_t synced_count_{0};
-  volatile uint32_t unsynced_count_{0};
+  volatile uint32_t unsynced_count_{0};      // written by the main task only
+  volatile uint32_t isr_unsynced_count_{0};  // written by the zero-cross ISR only (no atomics needed: one writer each)
   volatile uint32_t last_delay_us_{0};
 
   uint32_t last_publish_ms_{0};
