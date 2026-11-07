@@ -66,6 +66,7 @@ Common to all chip types:
 | `edges_needed` | 8 | Clean edges in a row before the signal counts as locked |
 | `isr_offset_us` | 0 | Fine correction added to the delay (needs a scope to tune) |
 | `frequency` | none | Optional sensor with the measured mains frequency |
+| `restore_mode` | `RESTORE_DEFAULT_OFF` | Standard switch option, honored since this version: an ON state to restore is applied once the zero-cross signal is locked (after 3 s at the latest). Earlier versions always started OFF, so a relay that was ON before a power cut now comes back ON. Use `ALWAYS_OFF` for the old behavior |
 
 ### `chip_type: none`
 The hardware already provides the zero-cross signal on `zx_pin`. No further options.
