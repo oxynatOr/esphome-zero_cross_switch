@@ -15,6 +15,8 @@ static const char *const TAG = "zero_cross_switch";
 // A request that no zero-cross edge picked up after this long is switched directly (the signal is probably gone).
 static constexpr uint32_t REQUEST_TIMEOUT_MS = 60;
 static constexpr uint32_t DIAG_INTERVAL_MS = 5000;
+// An ON state to restore waits this long for the zero-cross signal to lock before the relay is switched directly.
+static constexpr uint32_t RESTORE_LOCK_TIMEOUT_MS = 3000;
 
 static inline __attribute__((always_inline)) uint32_t now_us() { return static_cast<uint32_t>(esp_timer_get_time()); }
 
@@ -51,6 +53,16 @@ void ZeroCrossSwitch::setup() {
 
   this->zx_pin_->setup();
   this->zx_pin_->attach_interrupt(&ZeroCrossSwitch::zx_isr_, this, this->zx_edge_);
+
+  // restore_mode: the relay is OFF now. A state to restore as ON is applied from loop() once the signal is locked,
+  // so that it also switches at a zero crossing.
+  const auto initial = this->get_initial_state_with_restore_mode();
+  if (initial.has_value() && *initial) {
+    this->restore_pending_ = true;
+    this->restore_start_ms_ = millis();
+  } else {
+    this->publish_state(false);
+  }
 }
 
 void ZeroCrossSwitch::drive_relay_isr_(bool state) {
@@ -107,6 +119,7 @@ bool ZeroCrossSwitch::timer_isr_(gptimer_handle_t timer, const gptimer_alarm_eve
 }
 
 void ZeroCrossSwitch::write_state(bool state) {
+  this->restore_pending_ = false;  // any command replaces a pending restore
   if (this->timer_ok_ && this->estimator_ != nullptr && this->estimator_->locked(now_us())) {
     // Synchronised: hand the request to the next zero-cross edge. Order matters: state first, then the flag.
     this->request_state_ = state;
@@ -126,6 +139,9 @@ void ZeroCrossSwitch::loop() {
   if (this->chip_ != nullptr)
     this->chip_->service(ms);
   const uint32_t t_us = now_us();
+  if (this->restore_pending_ && (this->estimator_->locked(t_us) || (ms - this->restore_start_ms_) > RESTORE_LOCK_TIMEOUT_MS)) {
+    this->write_state(true);  // clears restore_pending_
+  }
   if (this->estimator_->locked(t_us)) {
     this->was_locked_ = true;
   } else if (this->was_locked_ && this->estimator_->stale(t_us)) {

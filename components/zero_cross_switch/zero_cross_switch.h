@@ -59,6 +59,10 @@ class ZeroCrossSwitch : public switch_::Switch, public Component {
   sensor::Sensor *frequency_sensor_{nullptr};
   ZxChip *chip_{nullptr};
 
+  // restore_mode: an ON state to restore is applied as soon as the zero-cross signal is locked (or after a timeout)
+  bool restore_pending_{false};
+  uint32_t restore_start_ms_{0};
+
   gptimer_handle_t timer_{nullptr};
   bool timer_ok_{false};
   uint8_t relay_gpio_{0};
